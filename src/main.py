@@ -15,7 +15,6 @@ if not cap.isOpened():
     print("Erro")
     sys.exit()
 
-
 def segment_color(frame):
     hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
 
@@ -24,14 +23,24 @@ def segment_color(frame):
 
     mask = cv2.inRange(hsv, lower_color, upper_color)
 
-    return mask
+    contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+    if contours:
+        largest_contour = max(contours, key=cv2.contourArea)
+        x, y, w, h = cv2.boundingRect(largest_contour)
+        center_x = x + w // 2
+        center_y = y + h // 2
+        return mask, (center_x, center_y)
+
+    return mask, None
+
 while True:
     ret, frame = cap.read()
     if not ret:
         print("Erro")
         break
 
-    mask = segment_color(frame)
+    mask, position = segment_color(frame)
 
     cv2.imshow('Original', frame)
     cv2.imshow('Mask', mask)
@@ -43,8 +52,14 @@ while True:
             pygame.quit()
             sys.exit()
 
-    screen.fill((0, 0, 0))
+    if position:
+        center_x, center_y = position
+
+        pygame.draw.circle(screen, (255, 0, 0), (center_x * width // cap.get(3), center_y * height // cap.get(4)), 10)
+
     pygame.display.flip()
+
+    screen.fill((0, 0, 0))
 
     pygame.time.delay(30)
 
