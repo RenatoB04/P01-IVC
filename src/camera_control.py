@@ -3,7 +3,6 @@ import numpy as np
 import socket
 import sys
 from collections import deque
-import time
 
 server_ip = 'localhost'
 server_port = 5000
@@ -19,14 +18,9 @@ position_history = deque(maxlen=7)
 
 client_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
-last_time = time.time()
-frame_rate = 15
-
-
 def segment_color(frame):
     hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
     mask = cv2.inRange(hsv, lower_orange, upper_orange)
-
     contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     if contours:
         largest_contour = max(contours, key=cv2.contourArea)
@@ -36,27 +30,23 @@ def segment_color(frame):
             return mask, center_x
     return mask, None
 
-
 while True:
     ret, frame = cap.read()
     if not ret:
         print("Error")
         break
 
-    if (time.time() - last_time) > (1.0 / frame_rate):
-        frame = cv2.flip(frame, 1)
-        mask, position = segment_color(frame)
+    frame = cv2.flip(frame, 1)
+    mask, position = segment_color(frame)
 
-        if position:
-            position_history.append(position)
-            average_x = int(np.mean(position_history))
-            message = str(average_x).encode()
-            client_socket.sendto(message, (server_ip, server_port))
+    if position:
+        position_history.append(position)
+        average_x = int(np.mean(position_history))
+        message = str(average_x).encode()
+        client_socket.sendto(message, (server_ip, server_port))
 
-        cv2.imshow('Original', frame)
-        cv2.imshow('Mask', mask)
-
-        last_time = time.time()
+    cv2.imshow('Original', frame)
+    cv2.imshow('Mask', mask)
 
     if cv2.waitKey(1) & 0xFF == ord('q'):
         break
