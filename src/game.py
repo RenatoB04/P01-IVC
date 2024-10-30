@@ -9,7 +9,7 @@ camera_process = subprocess.Popen(["python", "camera_control.py"])
 pygame.init()
 width, height = 640, 480
 screen = pygame.display.set_mode((width, height))
-pygame.display.set_caption('P01-IVC!')
+pygame.display.set_caption('P01-IVC')
 font = pygame.font.SysFont("Arial", 24)
 clock = pygame.time.Clock()
 
@@ -31,6 +31,7 @@ start_game_text = font.render("Press SPACE to start", True, (255, 255, 255))
 
 camera_position = paddle_x
 
+
 def setup_level(level):
     global ball_dx, ball_dy, bricks
     bricks = []
@@ -42,6 +43,7 @@ def setup_level(level):
             brick_rect = pygame.Rect(col * brick_width, row * brick_height + 50, brick_width, brick_height)
             bricks.append(brick_rect)
 
+
 def receive_camera_data():
     global camera_position
     while True:
@@ -50,6 +52,7 @@ def receive_camera_data():
             camera_position = int(data.decode())
         except BlockingIOError:
             continue
+
 
 thread = threading.Thread(target=receive_camera_data, daemon=True)
 thread.start()
@@ -90,7 +93,14 @@ while True:
             if paddle_x <= ball_x <= paddle_x + paddle_width:
                 ball_dy *= -1
 
-        bricks = [brick for brick in bricks if not brick.collidepoint(ball_x, ball_y)]
+        for brick in bricks[:]:
+            if brick.collidepoint(ball_x, ball_y):
+                bricks.remove(brick)
+
+                if abs(ball_x - (brick.x + brick.width // 2)) > abs(ball_y - (brick.y + brick.height // 2)):
+                    ball_dx *= -1
+                else:
+                    ball_dy *= -1
 
         if len(bricks) == 0:
             level += 1
