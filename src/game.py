@@ -21,17 +21,26 @@ paddle_width, paddle_height = 100, 10
 paddle_x, paddle_y = width // 2 - paddle_width // 2, height - 30
 ball_radius, ball_x, ball_y = 10, width // 2, height // 2
 ball_dx, ball_dy = 4, -4
-lives, game_started = 3, False
+lives, game_started, level = 3, False, 1
 
-brick_rows, brick_cols = 3, 10
-brick_width, brick_height = width // brick_cols, 20
-bricks = [pygame.Rect(col * brick_width, row * brick_height + 50, brick_width, brick_height)
-          for row in range(brick_rows) for col in range(brick_cols)]
+brick_width, brick_height = width // 10, 20
+bricks = []
 
 awaiting_input_text = font.render("Waiting for camera control", True, (255, 255, 255))
 start_game_text = font.render("Press SPACE to start", True, (255, 255, 255))
 
 camera_position = paddle_x
+
+def setup_level(level):
+    global ball_dx, ball_dy, bricks
+    bricks = []
+    ball_dx = 4 + (level - 1) * 1.5
+    ball_dy = -4 - (level - 1) * 1.5
+    rows = level + 2
+    for row in range(rows):
+        for col in range(10):
+            brick_rect = pygame.Rect(col * brick_width, row * brick_height + 50, brick_width, brick_height)
+            bricks.append(brick_rect)
 
 def receive_camera_data():
     global camera_position
@@ -44,6 +53,8 @@ def receive_camera_data():
 
 thread = threading.Thread(target=receive_camera_data, daemon=True)
 thread.start()
+
+setup_level(level)
 
 while True:
     clock.tick(30)
@@ -72,7 +83,8 @@ while True:
             ball_x, ball_y = width // 2, height // 2
             lives -= 1
             if lives <= 0:
-                game_started, lives = False, 3
+                game_started, lives, level = False, 3, 1
+                setup_level(level)
 
         if paddle_y <= ball_y + ball_radius <= paddle_y + paddle_height:
             if paddle_x <= ball_x <= paddle_x + paddle_width:
@@ -81,14 +93,15 @@ while True:
         bricks = [brick for brick in bricks if not brick.collidepoint(ball_x, ball_y)]
 
         if len(bricks) == 0:
-            game_started = False
+            level += 1
+            setup_level(level)
 
         for brick in bricks:
             pygame.draw.rect(screen, (255, 100, 100), brick)
         pygame.draw.rect(screen, (0, 255, 0), (paddle_x, paddle_y, paddle_width, paddle_height))
         pygame.draw.circle(screen, (255, 255, 255), (ball_x, ball_y), ball_radius)
 
-        lives_text = font.render(f"Lives: {lives}", True, (0, 0, 0))
+        lives_text = font.render(f"Lives: {lives} | Level: {level}", True, (0, 0, 0))
         screen.blit(lives_text, (10, 10))
     else:
         screen.fill((0, 0, 0))
