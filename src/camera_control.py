@@ -25,8 +25,8 @@ def segment_color(frame):
     if contours:
         largest_contour = max(contours, key=cv2.contourArea)
         if cv2.contourArea(largest_contour) > 500:
-            x, y, w, h = cv2.boundingRect(largest_contour)
-            center_x = x + w // 2
+            moments = cv2.moments(largest_contour)
+            center_x = int(moments["m10"] / moments["m00"])
             return mask, center_x
     return mask, None
 

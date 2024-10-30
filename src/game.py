@@ -39,8 +39,9 @@ def setup_level(level):
     rows = level + 2
     for row in range(rows):
         for col in range(10):
-            brick_rect = pygame.Rect(col * brick_width, row * brick_height + 50, brick_width, brick_height)
-            bricks.append(brick_rect)
+            x = col * brick_width
+            y = row * brick_height + 50
+            bricks.append((x, y))
 
 def receive_camera_data():
     global camera_position
@@ -91,9 +92,11 @@ while True:
                 ball_dy *= -1
 
         for brick in bricks[:]:
-            if brick.collidepoint(ball_x, ball_y):
+            brick_x, brick_y = brick
+            if (brick_x <= ball_x <= brick_x + brick_width and
+                    brick_y <= ball_y <= brick_y + brick_height):
                 bricks.remove(brick)
-                if abs(ball_x - (brick.x + brick.width // 2)) > abs(ball_y - (brick.y + brick.height // 2)):
+                if abs(ball_x - (brick_x + brick_width // 2)) > abs(ball_y - (brick_y + brick_height // 2)):
                     ball_dx *= -1
                 else:
                     ball_dy *= -1
@@ -102,9 +105,9 @@ while True:
             level += 1
             setup_level(level)
 
-        for brick in bricks:
-            pygame.draw.rect(screen, (0, 0, 0), brick.inflate(2, 2))
-            pygame.draw.rect(screen, (255, 100, 100), brick)
+        for brick_x, brick_y in bricks:
+            pygame.draw.rect(screen, (0, 0, 0), (brick_x - 1, brick_y - 1, brick_width + 2, brick_height + 2))
+            pygame.draw.rect(screen, (255, 100, 100), (brick_x, brick_y, brick_width, brick_height))
 
         pygame.draw.rect(screen, (0, 255, 0), (paddle_x, paddle_y, paddle_width, paddle_height))
         pygame.draw.circle(screen, (255, 255, 255), (ball_x, ball_y), ball_radius)
