@@ -31,7 +31,6 @@ start_game_text = font.render("Press SPACE to start", True, (255, 255, 255))
 
 camera_position = paddle_x
 
-
 def setup_level(level):
     global ball_dx, ball_dy, bricks
     bricks = []
@@ -43,7 +42,6 @@ def setup_level(level):
             brick_rect = pygame.Rect(col * brick_width, row * brick_height + 50, brick_width, brick_height)
             bricks.append(brick_rect)
 
-
 def receive_camera_data():
     global camera_position
     while True:
@@ -52,7 +50,6 @@ def receive_camera_data():
             camera_position = int(data.decode())
         except BlockingIOError:
             continue
-
 
 thread = threading.Thread(target=receive_camera_data, daemon=True)
 thread.start()
@@ -96,7 +93,6 @@ while True:
         for brick in bricks[:]:
             if brick.collidepoint(ball_x, ball_y):
                 bricks.remove(brick)
-
                 if abs(ball_x - (brick.x + brick.width // 2)) > abs(ball_y - (brick.y + brick.height // 2)):
                     ball_dx *= -1
                 else:
@@ -107,7 +103,9 @@ while True:
             setup_level(level)
 
         for brick in bricks:
+            pygame.draw.rect(screen, (0, 0, 0), brick.inflate(2, 2))
             pygame.draw.rect(screen, (255, 100, 100), brick)
+
         pygame.draw.rect(screen, (0, 255, 0), (paddle_x, paddle_y, paddle_width, paddle_height))
         pygame.draw.circle(screen, (255, 255, 255), (ball_x, ball_y), ball_radius)
 
