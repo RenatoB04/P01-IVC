@@ -3,9 +3,13 @@ import socket
 import sys
 import subprocess
 import threading
+import os
+
+# Encontra o interpretador Python atual
+python_executable = sys.executable
 
 # Inicia o processo do controlo da câmara (camera_control.py)
-camera_process = subprocess.Popen(["python", "camera_control.py"])
+camera_process = subprocess.Popen([python_executable, os.path.join(os.path.dirname(__file__), "camera_control.py")])
 
 # Inicializa o Pygame e configura a janela do jogo
 pygame.init()
