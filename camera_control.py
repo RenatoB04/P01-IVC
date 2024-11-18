@@ -14,10 +14,15 @@ if not cap.isOpened():
     print("Erro: Não foi possível abrir a câmara")
     sys.exit()
 
-model = YOLO("yolov8n.pt")
+model = YOLO("yolov8n.pt")  # Carrega o modelo YOLOv8 nano
+model.fuse()  # Otimiza o modelo para inferência em CPU
+
+cap.set(cv2.CAP_PROP_FRAME_WIDTH, 320)
+cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 240)
 
 def detect_objects(frame):
-    results = model(frame)
+    resized_frame = cv2.resize(frame, (320, 240))
+    results = model.predict(resized_frame, imgsz=320, conf=0.5, device="cpu")  # Usa CPU explicitamente
     detections = results[0].boxes
     mask = np.zeros(frame.shape[:2], dtype=np.uint8)
     center_x = None
@@ -26,6 +31,7 @@ def detect_objects(frame):
         x1, y1, x2, y2 = detection.xyxy[0]
         cx, cy = int((x1 + x2) / 2), int((y1 + y2) / 2)
         radius = int(min(x2 - x1, y2 - y1) / 2)
+        cx, cy = int(cx * frame.shape[1] / 320), int(cy * frame.shape[0] / 240)
         cv2.circle(mask, (cx, cy), radius, 255, -1)
         center_x = cx
         break
