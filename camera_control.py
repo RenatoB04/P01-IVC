@@ -1,64 +1,73 @@
 import cv2
-import numpy as np
 import socket
 import sys
-from ultralytics import YOLO
+import os
 
-server_ip = 'localhost'
-server_port = 5000
+# Configuração do servidor para envio dos dados da posição do rosto
+server_ip = 'localhost'  # Endereço IP do servidor que irá receber os dados
+server_port = 5000  # Porta de comunicação do servidor
 
+# Criação do socket UDP para envio dos dados
 client_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
-cap = cv2.VideoCapture(0)
-if not cap.isOpened():
+# Inicialização da câmara
+cap = cv2.VideoCapture(0)  # Abre a câmara padrão (índice 0)
+if not cap.isOpened():  # Verifica se a câmara foi aberta com sucesso
     print("Erro: Não foi possível abrir a câmara")
-    sys.exit()
+    sys.exit()  # Termina o programa caso a câmara não funcione
 
-model = YOLO("yolov8n.pt")  # Carrega o modelo YOLOv8 nano
-model.fuse()  # Otimiza o modelo para inferência em CPU
+# Define a resolução da câmara
+cap.set(cv2.CAP_PROP_FRAME_WIDTH, 320)  # Largura do frame
+cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 240)  # Altura do frame
 
-cap.set(cv2.CAP_PROP_FRAME_WIDTH, 320)
-cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 240)
+# Verifica e obtém o caminho do ficheiro de cascata para detecção de rostos
+cascade_path = os.path.join(os.path.dirname(__file__), "haarcascade_frontalface_default.xml")
+if not os.path.exists(cascade_path):  # Garante que o ficheiro existe no diretório
+    print("Erro: O ficheiro 'haarcascade_frontalface_default.xml' não foi encontrado. "
+          "Certifique-se de que está no mesmo diretório deste script.")
+    sys.exit()  # Termina o programa se o ficheiro não estiver presente
 
-def detect_objects(frame):
-    resized_frame = cv2.resize(frame, (320, 240))
-    results = model.predict(resized_frame, imgsz=320, conf=0.5, device="cpu")  # Usa CPU explicitamente
-    detections = results[0].boxes
-    mask = np.zeros(frame.shape[:2], dtype=np.uint8)
-    center_x = None
+# Carrega o classificador Viola-Jones utilizando o ficheiro de cascata
+face_cascade = cv2.CascadeClassifier(cascade_path)
 
-    for detection in detections:
-        x1, y1, x2, y2 = detection.xyxy[0]
-        cx, cy = int((x1 + x2) / 2), int((y1 + y2) / 2)
-        radius = int(min(x2 - x1, y2 - y1) / 2)
-        cx, cy = int(cx * frame.shape[1] / 320), int(cy * frame.shape[0] / 240)
-        cv2.circle(mask, (cx, cy), radius, 255, -1)
-        center_x = cx
-        break
-
-    return mask, center_x
-
+# Loop principal para captura e processamento dos frames da câmara
 while True:
-    ret, frame = cap.read()
-    if not ret:
-        print("Erro: Não foi possível capturar o quadro")
-        break
+    ret, frame = cap.read()  # Captura um frame da câmara
+    if not ret:  # Verifica se o frame foi capturado com sucesso
+        print("Erro: Não foi possível capturar o frame da câmara")
+        break  # Termina o loop caso não seja possível capturar frames
 
+    # Espelha horizontalmente a imagem para corresponder ao movimento natural
     frame = cv2.flip(frame, 1)
-    mask, center_x = detect_objects(frame)
 
-    if center_x is not None:
+    # Converte o frame capturado para escala de cinza, necessário para a detecção de rostos
+    gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+
+    # Realiza a detecção de rostos no frame em escala de cinza
+    # Parâmetros:
+    # - scaleFactor: controla a redução da imagem em cada escala
+    # - minNeighbors: define quantos vizinhos um retângulo precisa para ser considerado rosto
+    # - minSize: tamanho mínimo para considerar uma região como rosto
+    faces = face_cascade.detectMultiScale(gray_frame, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30))
+
+    center_x = None  # Inicializa a variável para armazenar o centro do rosto detectado
+
+    # Itera sobre os rostos detectados (caso existam)
+    for (x, y, w, h) in faces:
+        center_x = x + w // 2  # Calcula o centro horizontal do rosto
+        # Desenha um retângulo em torno do rosto detectado
+        cv2.rectangle(frame, (x, y), (x + w, y + h), (255, 0, 0), 2)
+        break  # Considera apenas o primeiro rosto detectado
+
+    if center_x is not None:  # Verifica se um rosto foi detectado
+        # Envia a posição horizontal do centro do rosto através do socket UDP
         message = str(center_x).encode()
         client_socket.sendto(message, (server_ip, server_port))
 
-    masked_frame = cv2.bitwise_and(frame, frame, mask=mask)
-
+    # Mostra a imagem capturada e processada com o retângulo em tempo real
     cv2.imshow('Camera', frame)
-    cv2.imshow('Mask', masked_frame)
 
-    if cv2.waitKey(1) & 0xFF == ord('q'):
-        break
-
-cap.release()
-cv2.destroyAllWindows()
-client_socket.close()
+# Liberta os recursos da câmara e fecha todas as janelas ao terminar o programa
+cap.release()  # Liberta a câmara
+cv2.destroyAllWindows()  # Fecha todas as janelas abertas pelo OpenCV
+client_socket.close()  # Fecha o socket UDP
