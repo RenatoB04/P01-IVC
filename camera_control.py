@@ -2,6 +2,7 @@ import cv2
 import socket
 import sys
 import os
+import threading
 
 # Configuração do servidor para envio dos dados da posição do rosto
 server_ip = 'localhost'  # Endereço IP do servidor que irá receber os dados
@@ -30,42 +31,61 @@ if not os.path.exists(cascade_path):  # Garante que o ficheiro existe no diretó
 # Carrega o classificador Viola-Jones utilizando o ficheiro de cascata
 face_cascade = cv2.CascadeClassifier(cascade_path)
 
-# Loop principal para captura e processamento dos frames da câmara
-while True:
-    ret, frame = cap.read()  # Captura um frame da câmara
-    if not ret:  # Verifica se o frame foi capturado com sucesso
-        print("Erro: Não foi possível capturar o frame da câmara")
-        break  # Termina o loop caso não seja possível capturar frames
+# Variável global para encerrar o programa
+running = True
 
-    # Espelha horizontalmente a imagem para corresponder ao movimento natural
-    frame = cv2.flip(frame, 1)
 
-    # Converte o frame capturado para escala de cinza, necessário para a detecção de rostos
-    gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+def detect_faces():
+    """Função que processa frames e envia a posição do rosto detetado."""
+    global running
 
-    # Realiza a detecção de rostos no frame em escala de cinza
-    # Parâmetros:
-    # - scaleFactor: controla a redução da imagem em cada escala
-    # - minNeighbors: define quantos vizinhos um retângulo precisa para ser considerado rosto
-    # - minSize: tamanho mínimo para considerar uma região como rosto
-    faces = face_cascade.detectMultiScale(gray_frame, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30))
+    while running:
+        ret, frame = cap.read()  # Captura um frame da câmara
+        if not ret:  # Verifica se o frame foi capturado com sucesso
+            print("Erro: Não foi possível capturar o frame da câmara")
+            break  # Termina o loop caso não seja possível capturar frames
 
-    center_x = None  # Inicializa a variável para armazenar o centro do rosto detectado
+        # Espelha horizontalmente a imagem para corresponder ao movimento natural
+        frame = cv2.flip(frame, 1)
 
-    # Itera sobre os rostos detectados (caso existam)
-    for (x, y, w, h) in faces:
-        center_x = x + w // 2  # Calcula o centro horizontal do rosto
-        # Desenha um retângulo em torno do rosto detectado
-        cv2.rectangle(frame, (x, y), (x + w, y + h), (255, 0, 0), 2)
-        break  # Considera apenas o primeiro rosto detectado
+        # Converte o frame capturado para escala de cinza, necessário para a detecção de rostos
+        gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
-    if center_x is not None:  # Verifica se um rosto foi detectado
-        # Envia a posição horizontal do centro do rosto através do socket UDP
-        message = str(center_x).encode()
-        client_socket.sendto(message, (server_ip, server_port))
+        # Realiza a detecção de rostos no frame em escala de cinza
+        faces = face_cascade.detectMultiScale(gray_frame, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30))
 
-    # Mostra a imagem capturada e processada com o retângulo em tempo real
-    cv2.imshow('Camera', frame)
+        center_x = None  # Inicializa a variável para armazenar o centro do rosto detectado
+
+        # Itera sobre os rostos detectados (caso existam)
+        for (x, y, w, h) in faces:
+            center_x = x + w // 2  # Calcula o centro horizontal do rosto
+            # Desenha um retângulo em torno do rosto detectado
+            cv2.rectangle(frame, (x, y), (x + w, y + h), (255, 0, 0), 2)
+            break  # Considera apenas o primeiro rosto detectado
+
+        if center_x is not None:  # Verifica se um rosto foi detectado
+            # Envia a posição horizontal do centro do rosto através do socket UDP
+            message = str(center_x).encode()
+            client_socket.sendto(message, (server_ip, server_port))
+
+        # Mostra a imagem capturada e processada com o retângulo em tempo real
+        cv2.imshow('Camera', frame)
+
+        # Aguarda brevemente para permitir o processamento suave
+        if cv2.waitKey(1) == 27:  # Esc encerra o programa
+            running = False
+            break
+
+
+# Inicia a detecção de rostos numa thread separada
+detector_thread = threading.Thread(target=detect_faces)
+detector_thread.start()
+
+try:
+    # Aguarda que a thread principal continue enquanto o programa corre
+    detector_thread.join()
+except KeyboardInterrupt:
+    running = False
 
 # Liberta os recursos da câmara e fecha todas as janelas ao terminar o programa
 cap.release()  # Liberta a câmara
