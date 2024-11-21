@@ -36,7 +36,7 @@ running = True
 
 
 def detect_faces():
-    """Função que processa frames e envia a posição do rosto detetado."""
+    """Função que processa frames e envia a posição do rosto mais próximo (maior) detetado."""
     global running
 
     while running:
@@ -54,19 +54,26 @@ def detect_faces():
         # Realiza a detecção de rostos no frame em escala de cinza
         faces = face_cascade.detectMultiScale(gray_frame, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30))
 
-        center_x = None  # Inicializa a variável para armazenar o centro do rosto detectado
+        center_x = None  # Inicializa a variável para armazenar o centro do rosto selecionado
+        largest_area = 0  # Variável para acompanhar o maior rosto detetado
 
-        # Itera sobre os rostos detectados (caso existam)
+        # Itera sobre os rostos detetados para encontrar o maior
         for (x, y, w, h) in faces:
-            center_x = x + w // 2  # Calcula o centro horizontal do rosto
-            # Desenha um retângulo em torno do rosto detectado
-            cv2.rectangle(frame, (x, y), (x + w, y + h), (255, 0, 0), 2)
-            break  # Considera apenas o primeiro rosto detectado
+            area = w * h  # Calcula a área do retângulo (rosto)
+            if area > largest_area:  # Verifica se este rosto é maior que o anterior
+                largest_area = area  # Atualiza a maior área encontrada
+                center_x = x + w // 2  # Atualiza o centro horizontal do maior rosto
 
-        if center_x is not None:  # Verifica se um rosto foi detectado
-            # Envia a posição horizontal do centro do rosto através do socket UDP
+        if center_x is not None:  # Verifica se um rosto foi detetado
+            # Envia a posição horizontal do centro do maior rosto através do socket UDP
             message = str(center_x).encode()
             client_socket.sendto(message, (server_ip, server_port))
+
+            # Desenha o retângulo ao redor do maior rosto
+            for (x, y, w, h) in faces:
+                if w * h == largest_area:  # Apenas desenha o maior rosto
+                    cv2.rectangle(frame, (x, y), (x + w, y + h), (255, 0, 0), 2)
+                    break
 
         # Mostra a imagem capturada e processada com o retângulo em tempo real
         cv2.imshow('Camera', frame)
