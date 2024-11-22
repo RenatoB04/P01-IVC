@@ -14,7 +14,7 @@ client_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 # Inicialização da câmara
 cap = cv2.VideoCapture(0)  # Abre a câmara padrão (índice 0)
 if not cap.isOpened():  # Verifica se a câmara foi aberta com sucesso
-    print("Erro: Não foi possível abrir a câmara")
+    print("Erro: Câmara")
     sys.exit()  # Termina o programa caso a câmara não funcione
 
 # Define a resolução da câmara
@@ -24,8 +24,7 @@ cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 240)  # Altura do frame
 # Verifica e obtém o caminho do ficheiro de cascata para detecção de rostos
 cascade_path = os.path.join(os.path.dirname(__file__), "haarcascade_frontalface_default.xml")
 if not os.path.exists(cascade_path):  # Garante que o ficheiro existe no diretório
-    print("Erro: O ficheiro 'haarcascade_frontalface_default.xml' não foi encontrado. "
-          "Certifique-se de que está no mesmo diretório deste script.")
+    print("Erro: Ficheiro .xml não encontrado. ")
     sys.exit()  # Termina o programa se o ficheiro não estiver presente
 
 # Carrega o classificador Viola-Jones utilizando o ficheiro de cascata
@@ -34,15 +33,14 @@ face_cascade = cv2.CascadeClassifier(cascade_path)
 # Variável global para encerrar o programa
 running = True
 
-
 def detect_faces():
-    """Função que processa frames e envia a posição do rosto mais próximo (maior) detetado."""
+    # Função que processa frames e envia a posição do rosto mais próximo (maior) detetado
     global running
 
     while running:
         ret, frame = cap.read()  # Captura um frame da câmara
         if not ret:  # Verifica se o frame foi capturado com sucesso
-            print("Erro: Não foi possível capturar o frame da câmara")
+            print("Erro: Frame")
             break  # Termina o loop caso não seja possível capturar frames
 
         # Espelha horizontalmente a imagem para corresponder ao movimento natural

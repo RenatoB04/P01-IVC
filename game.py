@@ -47,9 +47,8 @@ start_game_text = font.render("Press SPACE", True, (255, 255, 255))
 camera_position = paddle_x
 
 def setup_level(level):
-    """
-    Configura os blocos para o nível atual, ajustando a velocidade da bola.
-    """
+    # Configura os blocos para o nível atual, ajustando a velocidade da bola.
+
     global ball_dx, ball_dy, bricks
     bricks = []  # Limpa a lista de blocos
     ball_dx = 4 + (level - 1) * 1.5  # Aumenta a velocidade horizontal
@@ -63,9 +62,8 @@ def setup_level(level):
             bricks.append((x, y))
 
 def receive_camera_data():
-    """
-    Recebe dados de posição da câmara e atualiza a posição da plataforma.
-    """
+    # Recebe dados de posição da câmara e atualiza a posição da plataforma.
+
     global camera_position
     while True:
         try:
