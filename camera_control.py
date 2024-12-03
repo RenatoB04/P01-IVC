@@ -3,96 +3,95 @@ import socket
 import sys
 import os
 import threading
+import numpy as np
 
-# Configuração do servidor para envio dos dados da posição do rosto
-server_ip = 'localhost'  # Endereço IP do servidor que irá receber os dados
-server_port = 5000  # Porta de comunicação do servidor
+server_ip = 'localhost'
+server_port = 5000
 
-# Criação do socket UDP para envio dos dados
 client_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
-# Inicialização da câmara
-cap = cv2.VideoCapture(0)  # Abre a câmara padrão (índice 0)
-if not cap.isOpened():  # Verifica se a câmara foi aberta com sucesso
+cap = cv2.VideoCapture(0)
+if not cap.isOpened():
     print("Erro: Câmara")
-    sys.exit()  # Termina o programa caso a câmara não funcione
+    sys.exit()
 
-# Define a resolução da câmara
-cap.set(cv2.CAP_PROP_FRAME_WIDTH, 320)  # Largura do frame
-cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 240)  # Altura do frame
+cap.set(cv2.CAP_PROP_FRAME_WIDTH, 320)
+cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 240)
 
-# Verifica e obtém o caminho do ficheiro de cascata para detecção de rostos
-cascade_path = os.path.join(os.path.dirname(__file__), "haarcascade_frontalface_default.xml")
-if not os.path.exists(cascade_path):  # Garante que o ficheiro existe no diretório
-    print("Erro: Ficheiro .xml não encontrado. ")
-    sys.exit()  # Termina o programa se o ficheiro não estiver presente
-
-# Carrega o classificador Viola-Jones utilizando o ficheiro de cascata
-face_cascade = cv2.CascadeClassifier(cascade_path)
-
-# Variável global para encerrar o programa
 running = True
 
-def detect_faces():
-    # Função que processa frames e envia a posição do rosto mais próximo (maior) detetado
-    global running
+lk_params = dict(winSize=(15, 15),
+                 maxLevel=2,
+                 criteria=(cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 10, 0.03))
+
+feature_params = dict(maxCorners=100,
+                      qualityLevel=0.3,
+                      minDistance=7,
+                      blockSize=7)
+
+prev_gray = None
+prev_points = None
+
+
+def detect_motion():
+    global running, prev_gray, prev_points
 
     while running:
-        ret, frame = cap.read()  # Captura um frame da câmara
-        if not ret:  # Verifica se o frame foi capturado com sucesso
+        ret, frame = cap.read()
+        if not ret:
             print("Erro: Frame")
-            break  # Termina o loop caso não seja possível capturar frames
+            break
 
-        # Espelha horizontalmente a imagem para corresponder ao movimento natural
         frame = cv2.flip(frame, 1)
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
-        # Converte o frame capturado para escala de cinza, necessário para a detecção de rostos
-        gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        if prev_gray is None:
+            prev_gray = gray
+            prev_points = cv2.goodFeaturesToTrack(gray, mask=None, **feature_params)
+            continue
 
-        # Realiza a detecção de rostos no frame em escala de cinza
-        faces = face_cascade.detectMultiScale(gray_frame, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30))
+        if prev_points is not None:
+            next_points, status, _ = cv2.calcOpticalFlowPyrLK(prev_gray, gray, prev_points, None, **lk_params)
+            good_new = next_points[status == 1] if next_points is not None else []
+            good_old = prev_points[status == 1] if prev_points is not None else []
 
-        center_x = None  # Inicializa a variável para armazenar o centro do rosto selecionado
-        largest_area = 0  # Variável para acompanhar o maior rosto detetado
+            if len(good_new) > 0:
+                avg_x_movement = np.mean(good_new[:, 0] - good_old[:, 0])
+                center_x = int(frame.shape[1] // 2 + avg_x_movement * 5)
+                center_x = max(0, min(frame.shape[1], center_x))
 
-        # Itera sobre os rostos detetados para encontrar o maior
-        for (x, y, w, h) in faces:
-            area = w * h  # Calcula a área do retângulo (rosto)
-            if area > largest_area:  # Verifica se este rosto é maior que o anterior
-                largest_area = area  # Atualiza a maior área encontrada
-                center_x = x + w // 2  # Atualiza o centro horizontal do maior rosto
+                message = str(center_x).encode()
+                client_socket.sendto(message, (server_ip, server_port))
 
-        if center_x is not None:  # Verifica se um rosto foi detetado
-            # Envia a posição horizontal do centro do maior rosto através do socket UDP
-            message = str(center_x).encode()
-            client_socket.sendto(message, (server_ip, server_port))
+                for i, (new, old) in enumerate(zip(good_new, good_old)):
+                    a, b = new.ravel()
+                    c, d = old.ravel()
+                    cv2.line(frame, (int(a), int(b)), (int(c), int(d)), (0, 255, 0), 2)
+                    cv2.circle(frame, (int(a), int(b)), 5, (0, 0, 255), -1)
 
-            # Desenha o retângulo ao redor do maior rosto
-            for (x, y, w, h) in faces:
-                if w * h == largest_area:  # Apenas desenha o maior rosto
-                    cv2.rectangle(frame, (x, y), (x + w, y + h), (255, 0, 0), 2)
-                    break
+            else:
+                prev_points = cv2.goodFeaturesToTrack(gray, mask=None, **feature_params)
+        else:
+            prev_points = cv2.goodFeaturesToTrack(gray, mask=None, **feature_params)
 
-        # Mostra a imagem capturada e processada com o retângulo em tempo real
         cv2.imshow('Camera', frame)
 
-        # Aguarda brevemente para permitir o processamento suave
-        if cv2.waitKey(1) == 27:  # Esc encerra o programa
+        if cv2.waitKey(1) == 27:
             running = False
             break
 
+        prev_gray = gray.copy()
+        prev_points = cv2.goodFeaturesToTrack(gray, mask=None, **feature_params)
 
-# Inicia a detecção de rostos numa thread separada
-detector_thread = threading.Thread(target=detect_faces)
+
+detector_thread = threading.Thread(target=detect_motion)
 detector_thread.start()
 
 try:
-    # Aguarda que a thread principal continue enquanto o programa corre
     detector_thread.join()
 except KeyboardInterrupt:
     running = False
 
-# Liberta os recursos da câmara e fecha todas as janelas ao terminar o programa
-cap.release()  # Liberta a câmara
-cv2.destroyAllWindows()  # Fecha todas as janelas abertas pelo OpenCV
-client_socket.close()  # Fecha o socket UDP
+cap.release()
+cv2.destroyAllWindows()
+client_socket.close()
