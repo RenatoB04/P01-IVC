@@ -3,7 +3,6 @@ import socket
 import sys
 import os
 import threading
-import numpy as np
 
 server_ip = 'localhost'
 server_port = 5000
@@ -18,23 +17,21 @@ if not cap.isOpened():
 cap.set(cv2.CAP_PROP_FRAME_WIDTH, 320)
 cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 240)
 
+cascade_path = os.path.join(os.path.dirname(__file__), "haarcascade_frontalface_default.xml")
+if not os.path.exists(cascade_path):
+    print("Erro: Ficheiro .xml não encontrado.")
+    sys.exit()
+
+face_cascade = cv2.CascadeClassifier(cascade_path)
+
+tracker = cv2.legacy.TrackerCSRT_create()
+
 running = True
-
-lk_params = dict(winSize=(15, 15),
-                 maxLevel=2,
-                 criteria=(cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 10, 0.03))
-
-feature_params = dict(maxCorners=100,
-                      qualityLevel=0.3,
-                      minDistance=7,
-                      blockSize=7)
-
-prev_gray = None
-prev_points = None
-
+tracking = False
+center_x = None
 
 def detect_motion():
-    global running, prev_gray, prev_points
+    global running, tracking, center_x, tracker
 
     while running:
         ret, frame = cap.read()
@@ -45,44 +42,34 @@ def detect_motion():
         frame = cv2.flip(frame, 1)
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
-        if prev_gray is None:
-            prev_gray = gray
-            prev_points = cv2.goodFeaturesToTrack(gray, mask=None, **feature_params)
-            continue
+        if not tracking:
+            faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30))
 
-        if prev_points is not None:
-            next_points, status, _ = cv2.calcOpticalFlowPyrLK(prev_gray, gray, prev_points, None, **lk_params)
-            good_new = next_points[status == 1] if next_points is not None else []
-            good_old = prev_points[status == 1] if prev_points is not None else []
+            if len(faces) > 0:
+                (x, y, w, h) = faces[0]
+                center_x = x + w // 2
+                bbox = (x, y, w, h)
+                tracker.init(frame, bbox)
+                tracking = True
+                print("Rosto detectado e tracking iniciado.")
+        else:
+            success, bbox = tracker.update(frame)
+            if success:
+                (x, y, w, h) = [int(v) for v in bbox]
+                center_x = int(x + w // 2)
 
-            if len(good_new) > 0:
-                avg_x_movement = np.mean(good_new[:, 0] - good_old[:, 0])
-                center_x = int(frame.shape[1] // 2 + avg_x_movement * 5)
-                center_x = max(0, min(frame.shape[1], center_x))
-
+                cv2.circle(frame, (center_x, y + h // 2), 5, (0, 0, 255), -1)
                 message = str(center_x).encode()
                 client_socket.sendto(message, (server_ip, server_port))
-
-                for i, (new, old) in enumerate(zip(good_new, good_old)):
-                    a, b = new.ravel()
-                    c, d = old.ravel()
-                    cv2.line(frame, (int(a), int(b)), (int(c), int(d)), (0, 255, 0), 2)
-                    cv2.circle(frame, (int(a), int(b)), 5, (0, 0, 255), -1)
-
             else:
-                prev_points = cv2.goodFeaturesToTrack(gray, mask=None, **feature_params)
-        else:
-            prev_points = cv2.goodFeaturesToTrack(gray, mask=None, **feature_params)
+                tracking = False
+                print("Falha no tracking.")
 
         cv2.imshow('Camera', frame)
 
         if cv2.waitKey(1) == 27:
             running = False
             break
-
-        prev_gray = gray.copy()
-        prev_points = cv2.goodFeaturesToTrack(gray, mask=None, **feature_params)
-
 
 detector_thread = threading.Thread(target=detect_motion)
 detector_thread.start()
