@@ -38,7 +38,6 @@ running = True  # Flag para controlar o loop principal
 tracking = False  # Flag que indica se o tracker está a seguir o rosto
 center_x = None  # Variável que armazenará a posição horizontal do centro do rosto
 
-
 def detect_motion():
     global running, tracking, center_x, tracker
 
@@ -58,12 +57,17 @@ def detect_motion():
             faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30))
 
             if len(faces) > 0:  # Se algum rosto for detectado
-                (x, y, w, h) = faces[0]  # Pega as coordenadas do primeiro rosto detectado
+                (x, y, w, h) = faces[0]  # Pega nas coordenadas do primeiro rosto detectado
                 center_x = x + w // 2  # Calcula o centro do rosto
                 bbox = (x, y, w, h)  # Define a caixa delimitadora do rosto
-                tracker.init(frame, bbox)  # Inicializa o tracker com a caixa delimitadora
+                tracker = cv2.legacy.TrackerCSRT_create()  # Recria o tracker
+                tracker.init(frame, bbox)  # Inicializa o tracker com a bounding box
                 tracking = True  # Marca que o rastreamento está ativo
                 print("Rosto detectado e tracking iniciado.")
+            else:
+                # Mostra uma mensagem no ecrã para indicar que está à espera de deteção
+                cv2.putText(frame, "Nenhum rosto detectado.",
+                            (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
         else:
             # Atualiza a posição do rosto com o tracker CSRT
             success, bbox = tracker.update(frame)
@@ -80,7 +84,7 @@ def detect_motion():
             else:
                 # Se o rastreamento falhar, reinicia o processo de deteção
                 tracking = False
-                print("Falha no tracking.")
+                print("Falha no tracking. Reiniciando deteção.")
 
         # Exibe o frame com a imagem processada
         cv2.imshow('Camera', frame)
@@ -89,7 +93,6 @@ def detect_motion():
         if cv2.waitKey(1) == 27:
             running = False
             break
-
 
 # Criação de uma thread separada para realizar a deteção de movimento
 detector_thread = threading.Thread(target=detect_motion)
@@ -101,7 +104,7 @@ try:
 except KeyboardInterrupt:
     running = False
 
-# Libera os recursos e encerra as janelas do OpenCV ao terminar o programa
+# Liberta os recursos e encerra as janelas do OpenCV ao terminar o programa
 cap.release()
 cv2.destroyAllWindows()
 client_socket.close()  # Fecha a conexão do socket
